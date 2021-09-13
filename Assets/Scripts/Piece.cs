@@ -3,66 +3,110 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class Pieces {
-	static public Vector2[] L = new Vector2[] {
-		new Vector2(0, 13),
-		new Vector2(0, 14),
-		new Vector2(1, 14),
-		new Vector2(2, 14),
+	/* 
+		Pieces are drawn on a grid to assist with rotations.
+		The piece is tracked by its center cell, and the rest 
+		of the squares are tracked by their positions in the grid.
+
+		(0, 0) is the center of the grid. These declarations are
+		aligned to approximate the shape they define.
+	*/
+	static Vector2[] L = new Vector2[] {
+			new Vector2(1, 1),
+		Vector2.left, Vector2.zero, Vector2.right,
 	};
 
-	static public Vector2[][] pieces = new Vector2[][] {L};
+	static Vector2[] J = new Vector2[] {
+		new Vector2(-1, 1),
+			Vector2.left, Vector2.zero, Vector2.right,
+	};
+
+	static Vector2[] I = new Vector2[] {
+		new Vector2(0, -2),
+		new Vector2(0, -1),
+		new Vector2(0, 0),
+		new Vector2(0, 1),
+	};
+
+	static Vector2[] O = new Vector2[] {
+		new Vector2(1, 0), new Vector2(1, 1),
+		new Vector2(0, 0), new Vector2(0, 1),
+	};
+
+	static Vector2[] S = new Vector2[] {
+			Vector2.up, new Vector2(1, 1),
+		Vector2.left, Vector2.zero, 
+	};
+
+	static Vector2[] T = new Vector2[] {
+			Vector2.up, 
+		Vector2.left, Vector2.zero, Vector2.right, 
+	};
+
+	static Vector2[] Z = new Vector2[] {
+		new Vector2(-1, 1), Vector2.up,
+			Vector2.zero, Vector2.right,
+	};
+
+	static public Vector2[][] pieces = new Vector2[][] 
+		{L, J, I, O, S, T, Z};
+
+	static public Color[] colors = new Color[] {  // same order as above
+		new Color(1f, 0.5f, 0),  // orange. C'mon Unity :|
+		Color.blue,
+		Color.cyan, 
+		Color.yellow, 
+		Color.green, 
+		Color.magenta, 
+		Color.red,
+	};
 }
 
 public class Piece {
-	static public Color[] colors = new Color[] {Color.blue, Color.red, Color.green};
+	public Color color;  // the color of all the squares
 
-	public Square[] squares;
-	public Color color;
+	Vector2 center;  // position of the center piece
+	Vector2[] relativeSquares;  // the squares relative to the center
 
-	public Piece(Vector2[] other) {  // Use a template from Pieces
-		squares = new Square[other.Length];
-		color = colors [Random.Range(0, colors.Length)];
-
-		for (int index = 0; index < squares.Length; index++) {
-			Vector2 position = other [index];
-			Square copy = new Square(position);
-			copy.color = color;
-			squares [index] = copy;
-		}
+	public Piece(Vector2[] positions, Color color) {  // Use a template from Pieces
+		this.color = color;
+		center = new Vector2(Config.width / 2, Config.height + 1);
+		relativeSquares = new Vector2[positions.Length];
+		positions.CopyTo(relativeSquares, 0);
 	}
 
-	public bool Move(GridManager grid) {  // returns whether the piece moved
-		/* If a single square is blocked, so is the whole piece */
-		List<Vector2> newPositions = new List<Vector2>();
+	public Vector2[] GetSquares() {
+		Vector2[] result = new Vector2[relativeSquares.Length];
+		for (int index = 0; index < result.Length; index++) {
+			Vector2 relative = relativeSquares [index];
+			result [index] = center + relative;
+		}
+		return result;
+	}
 
-		// Remove all squares from the board to avoid interference
-		foreach (Square square in squares) {
-			grid.occupiedSquares.Remove(square.position);
+	/* Moves the piece down a tile. Returns whether the piece moved. */
+	public bool Move(GridManager grid, Vector2 direction) {
+		center += direction;  // preemptively move the piece
+		foreach (Vector2 square in GetSquares()) {
+			if (!grid.IsValid(square)) {
+				center -= direction;  // move the piece back
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/* Rotates the piece, if it can */
+	public void Rotate(GridManager grid) {
+		foreach (Vector2 square in relativeSquares) {
+			Vector2 newPosition = new Vector2(square.y, -square.x);
+			Vector2 global = newPosition + center;
+			if (!grid.IsValid(global)) return;
 		}
 
-		// Calculate each square one at a time
-		foreach (Square square in squares) {
-			Vector2 currentPosition = square.position;
-			Vector2 newPosition = currentPosition + Vector2.down;
-			if (!grid.occupiedSquares.Contains(newPosition) && currentPosition.y > 0)
-				newPositions.Add(newPosition);  // not blocked
-		}
-
-		if (newPositions.Count != squares.Length) {  // blocked
-			// Restore all the squares back to the board
-			foreach (Square square in squares) {
-				grid.occupiedSquares.Add(square.position);
-			}
-			return false;  // didn't move
-		} else {  // not blocked
-			// move each square to its new position all at once
-			for (int index = 0; index < squares.Length; index++) {
-				Square square = squares [index];
-				Vector2 newPosition = newPositions [index];
-				grid.occupiedSquares.Add(newPosition);
-				square.position = newPosition;
-			}
-			return true;  // moved
+		for (int index = 0; index < relativeSquares.Length; index++) {
+			Vector2 square = relativeSquares [index];
+			relativeSquares [index] = new Vector2(square.y, -square.x);
 		}
 	}
 }
