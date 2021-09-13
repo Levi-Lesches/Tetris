@@ -6,6 +6,7 @@ public class GridManager : MonoBehaviour {
 	public HashSet<Vector2> occupiedSquares = new HashSet<Vector2>();
 
 	List<List<Cell>> grid = new List<List<Cell>>();
+	List<Piece> bag = new List<Piece>();
 	Piece piece;
 	float timeBetweenMoves = 1;
 	float timeSinceLastMove = 0;
@@ -22,11 +23,27 @@ public class GridManager : MonoBehaviour {
 		AddPiece();
 	}
 
+	void ShuffleBag() {
+		int[] indices = new int[7] {0, 1, 2, 3, 4, 5, 6};
+		for (int index = 0; index < indices.Length; index++) {
+			int temp = indices [index];
+			int randomIndex = Random.Range(index, indices.Length);
+			indices [index] = indices [randomIndex];
+			indices [randomIndex] = temp;
+		}
+		bag.Clear();
+		foreach (int index in indices) {
+			Vector2[] template = Pieces.pieces [index];
+			Color color = Pieces.colors [index];
+			Piece piece = new Piece(template, color);
+			bag.Add(piece);
+		}
+	}
+
 	void AddPiece() {
-		int index = Random.Range(0, Pieces.pieces.Length);
-		Vector2[] template = Pieces.pieces [index];
-		Color color = Pieces.colors [index];
-		piece = new Piece(template, color);
+		if (bag.Count == 0) ShuffleBag();
+		piece = bag[0];
+		bag.RemoveAt(0);
 	}
 
 	bool MovePiece(Vector2 direction) {
@@ -47,7 +64,6 @@ public class GridManager : MonoBehaviour {
 			&& position.y >= 0
 			&& position.x >= 0 && position.x < Config.width;
 	}
-
 
 	// Update is called once per frame
 	void Update() {
