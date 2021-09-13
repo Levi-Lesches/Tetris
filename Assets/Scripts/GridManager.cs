@@ -65,6 +65,47 @@ public class GridManager : MonoBehaviour {
 			&& position.x >= 0 && position.x < Config.width;
 	}
 
+	void ClearRow(int row) {
+		Debug.Log("Clearing row " + row);
+		/* Move everything down and delete the cleared row */
+		HashSet<Vector2> newBoard = new HashSet<Vector2>();
+		foreach(Vector2 oldSquare in occupiedSquares) {
+			Color color = GetCell(oldSquare).sprite.color;  // record old color
+			GetCell(oldSquare).sprite.color = Cell.defaultColor;  // clear color
+			if (oldSquare.y == row) continue;
+			Vector2 newPosition = oldSquare.y < row
+				? oldSquare : oldSquare + Vector2.down;
+			newBoard.Add(newPosition);
+			GetCell(newPosition).sprite.color = color;
+		}
+		occupiedSquares = newBoard;
+	}
+
+	IEnumerator Lock(Piece piece) {  // use instead of this.piece since it changes
+		yield return new WaitForSeconds(0.5f);  // lock delay
+
+		// Add the squares to the board
+		foreach (Vector2 square in piece.GetSquares()) 
+			occupiedSquares.Add(square);
+
+		// Check if the affected rows are cleared
+		HashSet<int> cleared = new HashSet<int>();
+		foreach (Vector2 square in piece.GetSquares()) {
+			int row = (int) square.y;
+			if (cleared.Contains(row)) continue;
+			bool isFull = true;
+			for (int column = 0; column < Config.width; column++) {
+				Vector2 pos = new Vector2(column, row);
+				if (!occupiedSquares.Contains(pos)) {
+					isFull = false;
+					break;
+				}
+			}
+			if (isFull) cleared.Add((int) square.y);
+		}
+		foreach (int row in cleared) ClearRow(row);
+	}
+
 	// Update is called once per frame
 	void Update() {
 		// Speed up
@@ -88,8 +129,7 @@ public class GridManager : MonoBehaviour {
 
 		// Piece is blocked, add it to the board and send another piece
 		if (!didMove) {
-			foreach (Vector2 square in piece.GetSquares()) 
-				occupiedSquares.Add(square);
+			StartCoroutine(Lock(piece));
 			AddPiece();
 		}
 	}
