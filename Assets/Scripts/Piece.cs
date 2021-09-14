@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class Pieces {
@@ -11,44 +12,44 @@ public class Pieces {
 		(0, 0) is the center of the grid. These declarations are
 		aligned to approximate the shape they define.
 	*/
-	static Vector2[] L = new Vector2[] {
+	static List<Vector2> L = new List<Vector2> {
 			new Vector2(1, 1),
 		Vector2.left, Vector2.zero, Vector2.right,
 	};
 
-	static Vector2[] J = new Vector2[] {
+	static List<Vector2> J = new List<Vector2> {
 		new Vector2(-1, 1),
 			Vector2.left, Vector2.zero, Vector2.right,
 	};
 
-	static Vector2[] I = new Vector2[] {
-		new Vector2(0, -2),
-		new Vector2(0, -1),
+	static List<Vector2> I = new List<Vector2> {
+		new Vector2(-2, 0),
+		new Vector2(-1, 0),
 		new Vector2(0, 0),
-		new Vector2(0, 1),
+		new Vector2(1, 0),
 	};
 
-	static Vector2[] O = new Vector2[] {
-		new Vector2(1, 0), new Vector2(1, 1),
-		new Vector2(0, 0), new Vector2(0, 1),
+	static List<Vector2> O = new List<Vector2> {
+		new Vector2(-1, 0), new Vector2(0, 0),
+		new Vector2(-1, -1), new Vector2(0, -1),
 	};
 
-	static Vector2[] S = new Vector2[] {
+	static List<Vector2> S = new List<Vector2> {
 			Vector2.up, new Vector2(1, 1),
 		Vector2.left, Vector2.zero, 
 	};
 
-	static Vector2[] T = new Vector2[] {
+	static List<Vector2> T = new List<Vector2> {
 			Vector2.up, 
 		Vector2.left, Vector2.zero, Vector2.right, 
 	};
 
-	static Vector2[] Z = new Vector2[] {
+	static List<Vector2> Z = new List<Vector2> {
 		new Vector2(-1, 1), Vector2.up,
 			Vector2.zero, Vector2.right,
 	};
 
-	static public Vector2[][] pieces = new Vector2[][] 
+	static public List<Vector2>[] pieces = new List<Vector2>[] 
 		{L, J, I, O, S, T, Z};
 
 	static public Color[] colors = new Color[] {  // same order as above
@@ -66,22 +67,26 @@ public class Piece {
 	public Color color;  // the color of all the squares
 
 	Vector2 center;  // position of the center piece
-	Vector2[] relativeSquares;  // the squares relative to the center
+	List<Vector2> relativeSquares;  // the squares relative to the center
 
-	public Piece(Vector2[] positions, Color color) {  // Use a template from Pieces
-		this.color = color;
-		center = new Vector2(Config.width / 2, Config.height + 1);
-		relativeSquares = new Vector2[positions.Length];
-		positions.CopyTo(relativeSquares, 0);
+	public Piece(Piece other) {  // copy other Piece
+		color = other.color;
+		relativeSquares = other.relativeSquares.ToList();
+		center = Vector2.zero;
 	}
 
-	public Vector2[] GetSquares() {
-		Vector2[] result = new Vector2[relativeSquares.Length];
-		for (int index = 0; index < result.Length; index++) {
-			Vector2 relative = relativeSquares [index];
-			result [index] = center + relative;
-		}
-		return result;
+	public Piece(List<Vector2> positions, Color color) {  // Use a template from Pieces
+		this.color = color;
+		MoveToTop();
+		relativeSquares = positions.ToList();
+	}
+
+	public List<Vector2> GetSquares() {
+		return relativeSquares.Select(relative => center + relative).ToList();
+	}
+
+	public void MoveToTop() {
+		center = new Vector2(Config.width / 2, Config.height + 1);
 	}
 
 	/* Moves the piece down a tile. Returns whether the piece moved. */
@@ -98,15 +103,12 @@ public class Piece {
 
 	/* Rotates the piece, if it can */
 	public void Rotate(GridManager grid) {
-		foreach (Vector2 square in relativeSquares) {
-			Vector2 newPosition = new Vector2(square.y, -square.x);
-			Vector2 global = newPosition + center;
-			if (!grid.IsValid(global)) return;
-		}
+		if (relativeSquares.Any(  // check in advance
+			square => !grid.IsValid(new Vector2(square.y, -square.x) + center)
+		)) return;
 
-		for (int index = 0; index < relativeSquares.Length; index++) {
-			Vector2 square = relativeSquares [index];
-			relativeSquares [index] = new Vector2(square.y, -square.x);
-		}
+		relativeSquares = relativeSquares.Select(  // then make the change
+			square => new Vector2(square.y, -square.x)
+		).ToList();
 	}
 }
