@@ -15,6 +15,8 @@ public class GridManager : MonoBehaviour {
 	
 	float timeBetweenMoves = Config.defaultFallSpeed;
 	float timeSinceLastMove = 0;
+	float? timeUntilLock;
+	int rotations = 0;
 
 	// Start is called before the first frame update
 	void Start() {
@@ -47,7 +49,7 @@ public class GridManager : MonoBehaviour {
 	}
 
 	void AddPiece() {
-		// pop from bag, transfer from nextBag
+		/* Pop from [bag], transfer from [nextBag] to [bag] */
 		piece = bag[0];  // take
 		bag.RemoveAt(0);  // remove
 		bag.Add(nextBag[0]);  // replace
@@ -56,51 +58,33 @@ public class GridManager : MonoBehaviour {
 			ShuffleBag();
 		}
 		hud.RenderQueue(bag);
+		rotations = 0;
 	}
 
-	bool MovePiece(Vector2 direction) {
-		RenderPiece(Cell.defaultColor);
-		bool didMove = piece.Move(this, direction);
+	bool MovePiece(Vector2 offset) {
+		RenderPiece(Config.defaultColor);
+		bool didMove = piece.Move(this, offset);
 		RenderPiece(piece.color);
 		return didMove;
 	}
 
 	void RotatePiece() {
-		RenderPiece(Cell.defaultColor);
+		/* Rotates the current piece clockwise */
+		rotations++;
+		RenderPiece(Config.defaultColor);
 		piece.Rotate(this);
 		RenderPiece(piece.color);
 	}
 
 	public bool IsValid(Vector2 position) {
+		/* Returns whether the given position is unblocked */
 		return !occupiedSquares.Contains(position)
 			&& position.y >= 0
 			&& position.x >= 0 && position.x < Config.width;
 	}
 
-	void ClearRow(int row) {
-		/* Move everything down and delete the cleared row */
-		HashSet<Vector2> newBoard = new HashSet<Vector2>();
-		foreach(Vector2 oldSquare in occupiedSquares) {
-			Color color = GetCell(oldSquare).sprite.color;  // record old color
-			if (!newBoard.Contains(oldSquare))  // only clear if this is an old square
-				GetCell(oldSquare).sprite.color = Cell.defaultColor;
-			if (oldSquare.y == row) continue;
-			Vector2 newPosition = oldSquare.y < row
-				? oldSquare : oldSquare + Vector2.down;
-			newBoard.Add(newPosition);
-			GetCell(newPosition).sprite.color = color;
-		}
-		occupiedSquares = newBoard;
-	}
-
-	IEnumerator Lock(Piece piece) {  // use instead of this.piece since it changes
-		yield return new WaitForSeconds(0.5f);  // lock delay
-
-		// Add the squares to the board
-		foreach (Vector2 square in piece.GetSquares()) 
-			occupiedSquares.Add(square);
-
-		// Check which of the affected rows are cleared
+	List<int> GetClearedRows() {
+		/* Returns a list of cleared rows from the bottom up */
 		List<int> cleared = piece.GetSquares()
 			.Select(square => (int) square.y)  // convert to rows
 			.Where(row => Enumerable.Range(0, Config.width).All(  // full rows
@@ -108,19 +92,46 @@ public class GridManager : MonoBehaviour {
 			))
 			.Distinct().ToList();  // remove duplicates
 		cleared.Sort();  // clear from bottom to top
+		return cleared;
+	}
 
-		// Every row that's cleared means the next rows move down one
-		int numRows = 0;
-		for (int index = 0; index < cleared.Count; index++) {
-			int row = cleared [index];
-			row -= numRows;  // everything moves down one
-			numRows++;
-			ClearRow(row);
+	void ClearRows() {
+		HashSet<Vector2> newBoard = new HashSet<Vector2>();
+		List<int> clearedRows = GetClearedRows();
+		if (clearedRows.Count == 0) return;
+
+		foreach (Vector2 oldSquare in occupiedSquares) {
+			// Clear the cell, in case it hasn't been already
+			Cell oldCell = GetCell(oldSquare);
+			Color color = oldCell.color;
+			if (!newBoard.Contains(oldSquare)) oldCell.Clear();
+
+			// Find out how many rows to drop down
+			int oldRow = (int) oldSquare.y;
+			if (clearedRows.Contains(oldRow)) continue;
+			int rows = clearedRows.Where(row => oldRow > row).Count();
+			Vector2 newSquare = oldSquare + Vector2.down * rows;
+
+			// Remove the square, or move it down
+			GetCell(newSquare).color = color;
+			newBoard.Add(newSquare);
 		}
+		occupiedSquares = newBoard;  // swap the new board
+	}
+
+	void Lock() {
+		// yield return new WaitForSeconds(0.5f);  // lock delay
+		occupiedSquares.UnionWith(piece.GetSquares());
+		ClearRows();
+		AddPiece();
 	}
 
 	void Hold() {
-		RenderPiece(Cell.defaultColor);
+		// Rotate the block so it won't overflow the holding cell
+		int rotations = this.rotations;  // will be modified
+		for (int _ = 0; _ < 4 - rotations % 4; _++) RotatePiece();
+		RenderPiece(Config.defaultColor);
+
 		if (hold == null) {  // add to hold, draw new piece
 			hold = piece;
 			AddPiece();
@@ -149,18 +160,28 @@ public class GridManager : MonoBehaviour {
 		// Hold piece
 		if (Input.GetKeyDown("right shift") || Input.GetKeyDown("left shift")) Hold();
 
+		// Check if piece is locked
+		if (timeUntilLock != null) {
+			timeUntilLock -= Time.deltaTime;
+			if (timeUntilLock <= 0) {
+				// The piece may have been moved since it locked
+				bool canMove = piece.Move(this, Vector2.down);
+				if (canMove) piece.Move(this, Vector2.up);  // undo
+				timeUntilLock = null;
+				if (!canMove) Lock();
+			}
+			return;
+		}
+
 		// Check if the piece should move
-		if (piece == null) return;
 		timeSinceLastMove += Time.deltaTime;
 		if (timeSinceLastMove < timeBetweenMoves) return;
 		timeSinceLastMove = 0;
 
+		// Check if piece is blocked and queue it for locking
 		bool didMove = MovePiece(Vector2.down);
-
-		// Piece locked, add it to the board and send another piece
 		if (!didMove) {
-			StartCoroutine(Lock(piece));
-			AddPiece();
+			timeUntilLock = 0.5f;
 		}
 	}
 

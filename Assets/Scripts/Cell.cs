@@ -2,16 +2,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Cell : MonoBehaviour {
-	static public Color defaultColor = new Color(0.47f, 0.47f, 0.47f, 1f);
-	
+public class Cell : MonoBehaviour {	
 	public SpriteRenderer sprite;
 
-	public void Clear() {
-		sprite.color = defaultColor;
+	public Color color {
+		get { return sprite.color; }
+		set { sprite.color = value; }
 	}
 
-	public void SetColor(Color color) {
+	public void Clear() {
+		this.color = Config.defaultColor;
 		sprite.color = color;
 	}
 }

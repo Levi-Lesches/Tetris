@@ -69,12 +69,6 @@ public class Piece {
 	Vector2 center;  // position of the center piece
 	List<Vector2> relativeSquares;  // the squares relative to the center
 
-	public Piece(Piece other) {  // copy other Piece
-		color = other.color;
-		relativeSquares = other.relativeSquares.ToList();
-		center = Vector2.zero;
-	}
-
 	public Piece(List<Vector2> positions, Color color) {  // Use a template from Pieces
 		this.color = color;
 		MoveToTop();
@@ -82,7 +76,11 @@ public class Piece {
 	}
 
 	public List<Vector2> GetSquares() {
-		return relativeSquares.Select(relative => center + relative).ToList();
+		return GetSquares(center);
+	}
+
+	public List<Vector2> GetSquares(Vector2 anchor) {
+		return relativeSquares.Select(relative => anchor + relative).ToList();
 	}
 
 	public void MoveToTop() {
